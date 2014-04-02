@@ -15,13 +15,8 @@
     "media": [
     {
 	    "type" : "png",
-	    "name" : "PLAY_BUTTON",
-	    "file" : "images/play.png"
-    },
-    {
-	    "type" : "png",
-	    "name" : "PAUSE_BUTTON",
-	    "file" : "images/pause.png"
+	    "name" : "CHECK_BUTTON",
+	    "file" : "images/check.png"
     }
     ]
   }
