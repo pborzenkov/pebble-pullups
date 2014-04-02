@@ -1,72 +1,83 @@
 #include <pebble.h>
 
-static Window *window;
-static TextLayer *text_layer;
+static Window *main_win;
+static Layer *sbar_lay;
+char sbar_time[8];
 
-static void select_click_handler(ClickRecognizerRef recognizer, void *context)
+static void pullups_tick_handler(struct tm *time, TimeUnits unit);
+
+static void pullups_status_bar_update(Layer *lay, GContext *ctx)
 {
-	text_layer_set_text(text_layer, "Select");
+	clock_copy_time_string(sbar_time, sizeof(sbar_time));
+
+	graphics_context_set_text_color(ctx, GColorBlack);
+	graphics_draw_text(ctx, sbar_time,
+		fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
+		(GRect){
+			.origin = GPoint(0, 0),
+			.size = layer_get_frame(lay).size
+		},
+		GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 }
-
-static void up_click_handler(ClickRecognizerRef recognizer, void *context)
+static void pullups_status_bar_add(Window *win)
 {
-	text_layer_set_text(text_layer, "Up");
-}
+	Layer *root_lay = window_get_root_layer(main_win);
+	GRect bounds = layer_get_bounds(root_lay);
 
-static void down_click_handler(ClickRecognizerRef recognizer, void *context)
-{
-	text_layer_set_text(text_layer, "Down");
-}
-
-static void click_config_provider(void *context)
-{
-	window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
-	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
-	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
-}
-
-static void window_load(Window *window)
-{
-	Layer *window_layer = window_get_root_layer(window);
-	GRect bounds = layer_get_bounds(window_layer);
-
-	text_layer = text_layer_create((GRect){
-			.origin = {0, 72},
-			.size = {bounds.size.w, 20 }
+	sbar_lay = layer_create((GRect){
+			.origin = {0, 0},
+			.size = {bounds.size.w, 24}
 	});
-	text_layer_set_text(text_layer, "Press a button");
-	text_layer_set_text_alignment(text_layer, GTextAlignmentCenter);
-	layer_add_child(window_layer, text_layer_get_layer(text_layer));
+	layer_set_update_proc(sbar_lay, pullups_status_bar_update);
+	layer_add_child(root_lay, sbar_lay);
+	tick_timer_service_subscribe(SECOND_UNIT, pullups_tick_handler);
+}
+static void pullups_status_bar_del(Window *win)
+{
+	layer_destroy(sbar_lay);
 }
 
-static void window_unload(Window *window)
+static void main_window_load(Window *window)
 {
-	text_layer_destroy(text_layer);
+	pullups_status_bar_add(window);
+}
+
+static void main_window_unload(Window *window)
+{
+	pullups_status_bar_del(window);
+}
+
+static void main_window_disappear(Window *window)
+{
+	tick_timer_service_unsubscribe();
 }
 
 static void init(void)
 {
-	window = window_create();
-	window_set_click_config_provider(window, click_config_provider);
-	window_set_window_handlers(window, (WindowHandlers){
-			.load = window_load,
-			.unload = window_unload
+	main_win = window_create();
+	window_set_fullscreen(main_win, true);
+	window_set_window_handlers(main_win, (WindowHandlers){
+			.load = main_window_load,
+			.unload = main_window_unload,
+			.disappear = main_window_disappear,
 	});
-	window_stack_push(window, true);
+	window_stack_push(main_win, true);
 }
 
 static void deinit(void)
 {
-	window_destroy(window);
+	window_destroy(main_win);
+}
+
+static void pullups_tick_handler(struct tm *time, TimeUnits unit)
+{
+	if (unit == SECOND_UNIT)
+		layer_mark_dirty(sbar_lay);
 }
 
 int main(void)
 {
 	init();
-
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "Done initializing, pushed window: %p",
-			window);
-
 	app_event_loop();
 	deinit();
 	return 0;
