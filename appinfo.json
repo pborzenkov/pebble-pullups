@@ -1,0 +1,17 @@
+{
+  "uuid": "ea91b698-99f2-41f5-8142-f8d7bd68cc24",
+  "shortName": "Pull-ups",
+  "longName": "Pull-ups",
+  "companyName": "Pavel Borzenkov",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {
+    "dummy": 0
+  },
+  "resources": {
+    "media": []
+  }
+}
