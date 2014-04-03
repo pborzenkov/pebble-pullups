@@ -1,6 +1,6 @@
 #include <pebble.h>
 
-#define DEFAULT_TIME 30
+#define DEFAULT_TIME 60
 
 int cur_time = DEFAULT_TIME;
 int cur_reps = 1;
