@@ -1,5 +1,11 @@
 #include <pebble.h>
 
+enum {
+	ROW_TIME = 0,
+	ROW_REPS,
+	ROW_STEP,
+};
+
 struct setting {
 	union u_ {
 		struct s_ {
@@ -13,16 +19,18 @@ struct setting {
 char *names[3] = {"Interval", "Initial reps", "Step"};
 
 static struct setting cur_setting = {{{60, 1, 1}}};
-static int cur_time, cur_reps;
+static struct setting cur_tmp_setting;
+static int cur_time, cur_reps, cur_index;
 static int ticking;
 
-static Window *main_win, *settings_win;
+static Window *main_win, *settings_win, *tune_win;
 
 static ActionBarLayer *buttons;
-static Layer *main_layer;
-struct MenuLayer *settings_layer;
+static Layer *main_layer, *tune_layer;
+static MenuLayer *settings_layer;
+static InverterLayer *inv_layer;
 
-static GBitmap *check_button, *settings_button;
+static GBitmap *check_button, *settings_button, *down, *up;
 
 char str_reps[16], str_time[8];
 
@@ -57,14 +65,14 @@ static void pullups_main_layer_update(Layer *layer, GContext *ctx)
 	graphics_draw_text(ctx, str_reps,
 		fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
 		(GRect){
-			.origin = GPoint(10, 10),
+			.origin = (GPoint){10, 10},
 			.size = layer_get_frame(layer).size,
 		},
 		GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 	graphics_draw_text(ctx, str_time,
 		fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS),
 		(GRect){
-			.origin = GPoint(10, 50),
+			.origin = (GPoint){10, 50},
 			.size = layer_get_frame(layer).size,
 		},
 		GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
@@ -146,12 +154,18 @@ static void pullups_settings_draw_raw(GContext *ctx, const Layer *layer,
 	char num[8];
 	struct setting *set = context;
 
-	snprintf(num, sizeof(num), "%d", set->u.data[index->row]);
+	if (index->row == ROW_TIME)
+		snprintf(num, sizeof(num), "%0d:%02d", set->u.data[index->row] / 60,
+				set->u.data[index->row] % 60);
+	else
+		snprintf(num, sizeof(num), "%d", set->u.data[index->row]);
 	menu_cell_basic_draw(ctx, layer, names[index->row], num, NULL);
 }
 static void pullups_settings_select_click(struct MenuLayer *layer,
 		MenuIndex *index, void *context)
 {
+	cur_index = index->row;
+	window_stack_push(tune_win, true);
 }
 
 MenuLayerCallbacks settings_callbacks = {
@@ -164,6 +178,9 @@ static void settings_window_load(Window *window)
 {
 	Layer *layer = window_get_root_layer(window);
 
+	up = gbitmap_create_with_resource(RESOURCE_ID_UP_ARROW);
+	down = gbitmap_create_with_resource(RESOURCE_ID_DOWN_ARROW);
+
 	settings_layer = menu_layer_create(layer_get_bounds(layer));
 	menu_layer_set_callbacks(settings_layer, &cur_setting, settings_callbacks);
 	menu_layer_set_click_config_onto_window(settings_layer, window);
@@ -174,12 +191,103 @@ static void settings_window_load(Window *window)
 static void settings_window_unload(Window *window)
 {
 	menu_layer_destroy(settings_layer);
+
+	gbitmap_destroy(up);
+	gbitmap_destroy(down);
+}
+
+static void pullups_tune_layer_update(Layer *layer, GContext *ctx)
+{
+	GSize ls;
+	char text[8];
+	int width = 64;
+
+	ls = layer_get_frame(layer).size;
+	graphics_context_set_text_color(ctx, GColorBlack);
+	graphics_draw_text(ctx, names[cur_index],
+		fonts_get_system_font(FONT_KEY_GOTHIC_24),
+		(GRect){
+			.origin = (GPoint){0, 10},
+			.size = (GSize){ls.w, 28}
+		},
+		GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+
+	graphics_fill_rect(ctx,
+		(GRect){
+			.origin = (GPoint){ls.w / 2 - width / 2, 58},
+			.size = (GSize){ width, 36 }
+		}, 5, GCornersAll);
+
+	snprintf(text, sizeof(text), "%d", cur_tmp_setting.u.data[cur_index]);
+	graphics_context_set_text_color(ctx, GColorWhite);
+	graphics_draw_text(ctx, text,
+		fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS),
+		(GRect){
+			.origin = (GPoint){ls.w / 2 - width / 2, 58},
+			.size = (GSize){ width, 36 }
+		},
+		GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+	graphics_draw_bitmap_in_rect(ctx, up,
+		(GRect){
+			.origin = (GPoint){ls.w / 2 - 9, 42},
+			.size = (GSize){ 18, 16 }
+		});
+	graphics_draw_bitmap_in_rect(ctx, down,
+		(GRect){
+			.origin = (GPoint){ls.w / 2 - 9, 96},
+			.size = (GSize){ 18, 16 }
+		});
+}
+
+static void tune_window_load(Window *window)
+{
+	Layer *layer = window_get_root_layer(window);
+	tune_layer = layer_create(layer_get_frame(layer));
+	inv_layer = inverter_layer_create(layer_get_frame(layer));
+	layer_set_update_proc(tune_layer, pullups_tune_layer_update);
+	layer_add_child(layer, tune_layer);
+	layer_add_child(tune_layer, inverter_layer_get_layer(inv_layer));
+}
+
+static void tune_window_unload(Window *window)
+{
+	layer_destroy(inverter_layer_get_layer(inv_layer));
+	layer_destroy(tune_layer);
+}
+
+static void tune_window_appear(Window *window)
+{
+	layer_mark_dirty(tune_layer);
+}
+
+static void pullups_tune_handler(ClickRecognizerRef rec, void *context)
+{
+	int step = (int)context;
+
+	cur_tmp_setting.u.data[cur_index] += step;
+	layer_mark_dirty(tune_layer);
+}
+
+static void pullups_tune_apply(ClickRecognizerRef rec, void *context)
+{
+	cur_setting = cur_tmp_setting;
+	window_stack_pop(true);
+}
+
+static void tune_click_provider(void *context)
+{
+	window_set_click_context(BUTTON_ID_UP, (void *)1);
+	window_set_click_context(BUTTON_ID_DOWN, (void *)-1);
+	window_single_click_subscribe(BUTTON_ID_UP, pullups_tune_handler);
+	window_single_click_subscribe(BUTTON_ID_DOWN, pullups_tune_handler);
+	window_single_click_subscribe(BUTTON_ID_SELECT, pullups_tune_apply);
 }
 
 static void init(void)
 {
 	cur_time = cur_setting.u.s.time;
 	cur_reps = cur_setting.u.s.reps;
+	cur_tmp_setting = cur_setting;
 
 	main_win = window_create();
 	window_set_window_handlers(main_win, (WindowHandlers){
@@ -195,11 +303,20 @@ static void init(void)
 			.unload = settings_window_unload,
 	});
 
+	tune_win = window_create();
+	window_set_window_handlers(tune_win, (WindowHandlers){
+			.load = tune_window_load,
+			.unload = tune_window_unload,
+			.appear = tune_window_appear,
+	});
+	window_set_click_config_provider(tune_win, tune_click_provider);
+
 	window_stack_push(main_win, true);
 }
 
 static void deinit(void)
 {
+	window_destroy(tune_win);
 	window_destroy(settings_win);
 	window_destroy(main_win);
 }

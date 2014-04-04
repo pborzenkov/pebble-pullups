@@ -22,6 +22,16 @@
 	    "type" : "png",
 	    "name" : "SETTINGS_BUTTON",
 	    "file" : "images/settings.png"
+    },
+    {
+	    "type" : "png",
+	    "name" : "DOWN_ARROW",
+	    "file" : "images/down.png"
+    },
+    {
+	    "type" : "png",
+	    "name" : "UP_ARROW",
+	    "file" : "images/up.png"
     }
     ]
   }
