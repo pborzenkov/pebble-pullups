@@ -13,26 +13,31 @@ struct setting {
 char *names[3] = {"Interval", "Initial reps", "Step"};
 
 static struct setting cur_setting = {{{60, 1, 1}}};
-int cur_time, cur_reps;
+static int cur_time, cur_reps;
+static int ticking;
 
 static Window *main_win, *settings_win;
+
 static ActionBarLayer *buttons;
 static Layer *main_layer;
 struct MenuLayer *settings_layer;
+
 static GBitmap *check_button, *settings_button;
-char str_reps[16], str_time[16];
-static int ticking;
+
+char str_reps[16], str_time[8];
 
 static void pullups_tick_handler(struct tm *time, TimeUnits unit);
-static unsigned pullups_get_current_reps(void);
-static unsigned pullups_get_current_time(void);
 
 static void pullups_play_pause_handler(ClickRecognizerRef rec, void *context)
 {
 	if (ticking)
 		return;
-	ticking = 1;
 	cur_reps += cur_setting.u.s.step;
+	if (cur_reps <= 0) {
+		cur_reps = cur_setting.u.s.reps;
+		return;
+	}
+	ticking = 1;
 	tick_timer_service_subscribe(SECOND_UNIT, pullups_tick_handler);
 }
 
@@ -43,12 +48,10 @@ static void pullups_settings_handler(ClickRecognizerRef rec, void *context)
 
 static void pullups_main_layer_update(Layer *layer, GContext *ctx)
 {
-	unsigned time = pullups_get_current_time();
-
 	snprintf(str_reps, sizeof(str_reps),
-			"reps: %u\n", pullups_get_current_reps());
+			"reps: %d\n", cur_reps);
 	snprintf(str_time, sizeof(str_time),
-			"%0u:%02u\n", time / 60, time % 60);
+			"%0d:%02d\n", cur_time / 60, cur_time % 60);
 
 	graphics_context_set_text_color(ctx, GColorBlack);
 	graphics_draw_text(ctx, str_reps,
@@ -203,7 +206,7 @@ static void deinit(void)
 
 static void pullups_vibe(void)
 {
-	switch(pullups_get_current_time()) {
+	switch(cur_time) {
 		case 10: case 3:  case 2: case 1:
 			vibes_short_pulse(); break;
 		case 0:
@@ -231,15 +234,6 @@ static void pullups_tick_handler(struct tm *time, TimeUnits unit)
 
 	pullups_one_tick();
 	layer_mark_dirty(main_layer);
-}
-
-static unsigned pullups_get_current_reps(void)
-{
-	return cur_reps;
-}
-static unsigned pullups_get_current_time(void)
-{
-	return cur_time;
 }
 
 int main(void)
