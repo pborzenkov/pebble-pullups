@@ -17,6 +17,11 @@
 	    "type" : "png",
 	    "name" : "CHECK_BUTTON",
 	    "file" : "images/check.png"
+    },
+    {
+	    "type" : "png",
+	    "name" : "SETTINGS_BUTTON",
+	    "file" : "images/settings.png"
     }
     ]
   }
