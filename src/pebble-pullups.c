@@ -197,6 +197,7 @@ static void init(void)
 
 static void deinit(void)
 {
+	window_destroy(settings_win);
 	window_destroy(main_win);
 }
 
